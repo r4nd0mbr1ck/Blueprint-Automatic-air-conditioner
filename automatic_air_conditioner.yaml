@@ -114,6 +114,17 @@ blueprint:
         entity:
           domain: group
 
+    presence_room:
+      name: Presence Room
+      description: 'Select the binary sensor for Room Occupancy.. 
+      
+
+                   Selezionare il group composto da person.'
+      default: binary_sensor.presence_room_disabled
+      selector:
+        entity:
+          domain: binary_sensor
+
     moisture:
       name: Water level
       default: binary_sensor.moisture_disabled
@@ -172,6 +183,21 @@ blueprint:
       default: 10
       name: Delay temperature stop
       description: 'Set the climate shutdown delay since the target temperature has been reached. 
+
+      
+                   Impostare il ritardo spegnimento climate dal momento che è stata raggiunta la temperatura target. '
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: min
+          mode: slider
+          step: 1
+
+    delay_presence_stop:
+      default: 10
+      name: Delay Presence stop
+      description: 'Set the climate shutdown delay since the presence has been negative. 
 
       
                    Impostare il ritardo spegnimento climate dal momento che è stata raggiunta la temperatura target. '
@@ -280,6 +306,11 @@ trigger:
       - not_home
       - home
   id: presence_home
+- platform: state
+  entity_id: !input presence_room
+  id: presence_room
+  for: 
+    minutes: !input delay_presence_stop  
 action:
 - alias: Avviso tanica piena
   if: 
@@ -300,10 +331,10 @@ action:
     - condition: time
       after: !input start_time
       before: !input stop_time
-    - "{{ states(presence_home) == 'home' or presence_home == 'group.presence_home_disabled'}}"
+    - "{{ (states(presence_home) == 'home' or presence_home == 'group.presence_home_disabled') and (states(presence_room) == 'on' or presence_room == 'group.presence_room_disabled')}}"
     - or: 
-      - "{{ (trigger.id == 'climate_on' or trigger.id == 'window' or (trigger.id == 'presence_home' and trigger.to_state.state == 'home')) and season == 'Winter' and (state_attr(climate,'current_temperature')|float(0) < target_temperature_start|float(0) )}}"
-      - "{{ (trigger.id == 'climate_on' or trigger.id == 'window'or (trigger.id == 'presence_home' and trigger.to_state.state == 'home')) and season == 'Summer' and (state_attr(climate,'current_temperature')|float(0) > target_temperature_start|float(0) )}}"
+      - "{{ (trigger.id == 'climate_on' or trigger.id == 'window' or (trigger.id == 'presence_home' and trigger.to_state.state == 'home') or (trigger.id == 'presence_room' and trigger.to_state.state == 'on')) and season == 'Winter' and (state_attr(climate,'current_temperature')|float(0) < target_temperature_start|float(0) )}}"
+      - "{{ (trigger.id == 'climate_on' or trigger.id == 'window'or (trigger.id == 'presence_home' and trigger.to_state.state == 'home') or (trigger.id == 'presence_room' and trigger.to_state.state == 'on')) and season == 'Summer' and (state_attr(climate,'current_temperature')|float(0) > target_temperature_start|float(0) )}}"
   then:
       - alias: Controllo finestra
         if: 
@@ -344,6 +375,7 @@ action:
     - "{{not is_state(climate,'off')}}"
     - or: 
       - "{{ trigger.id == 'presence_home' and trigger.to_state.state == 'not_home'}}"
+      - "{{ trigger.id == 'presence_room' and trigger.to_state.state == 'off'}}"
       - "{{ trigger.id == 'climate_off' and season == 'Winter' and (state_attr(climate,'current_temperature')|float(0) > target_temperature_stop|float(0) )}}"
       - "{{ trigger.id == 'climate_off' and season == 'Summer' and (state_attr(climate,'current_temperature')|float(0) < target_temperature_stop|float(0) )}}"
       - "{{ trigger.id == 'climate_off' and trigger.platform == 'time'}}"
@@ -366,4 +398,3 @@ action:
                   {% elif language == 'English' and (trigger.id == 'climate_off' or trigger.id == 'presence_home')%} Automatic air conditioner shutdown.
                   {% elif language == 'English' and trigger.id == 'moisture_climate_off' %} Air conditioner off for water drain container full.
                   {% endif %}"
-          
